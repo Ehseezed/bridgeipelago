@@ -33,6 +33,8 @@ import numpy as np
 #Websocket Dependencies
 from websockets.sync.client import connect, ClientConnection
 
+import datetime
+
 #Discord Dependencies
 from discord.ext import tasks
 import discord
@@ -342,9 +344,11 @@ async def on_message(message):
     
     if message.channel.id != MainChannel.id:
         return
-    
+
+    print(message.content + " from " + str(message.author))
+
     # Registers user for a alot in Archipelago
-    if message.content.startswith('$register'):
+    if message.content.startswith('$register'): #todo: change this to allow multi register
         ArchSlot = message.content
         ArchSlot = ArchSlot.replace("$register ","")
         Status = await Command_Register(str(message.author),ArchSlot)
@@ -358,11 +362,28 @@ async def on_message(message):
     if message.content.startswith('$listreg'):
         await Command_ListRegistrations(message.author)
 
+
+    if message.content.startswith('$wakemeup'):
+        # Checks if the bot is connected to the Archipelago server
+        print("Attempting a reconnect")
+        await SendMainChannelMessage("Attempting a reconnect to Archipelago server...")
+        try:
+            tracker_client.stop()
+            tracker_client.start()
+            await SendMainChannelMessage("Reconnected to Archipelago server.")
+        except Exception as e:
+            await SendMainChannelMessage("Server Might be down, or the bot is not configured correctly.")
+            print(e)
+
     # Opens a discord DM with the user, and fires off the Katchmeup process
     # When the user asks, catch them up on checks they're registered for
     ## Yoinks their registration file, scans through it, then find the related ItemQueue file to scan through 
     if message.content.startswith('$ketchmeup'):
-        await Command_KetchMeUp(message.author)
+        print(f'Catching user {message.author} up on missed items.')
+        if message.content.endswith("-prog"):
+            await Command_KetchMeUp(message.author, True)
+        else:
+            await Command_KetchMeUp(message.author, False)
     
     # When the user asks, catch them up on the specified game
     ## Yoinks the specified ItemQueue file, scans through it, then sends the contents to the user
@@ -498,6 +519,13 @@ async def ProcessItemQueue():
                     i = open(ItemQueueFile, "a")
                     i.write(ItemCheckLogMessage)
                     i.close()
+
+                if int(itemclass) == 1:
+                    ItemQueueFile = ItemQueueDirectory + recipient + "_Prog.csv"
+                    i = open(ItemQueueFile, "a")
+                    i.write(ItemCheckLogMessage)
+                    i.close()
+
             else:
                 message = "Unknown Item Send :("
                 print(message)
@@ -606,8 +634,8 @@ async def first_command(interaction):
     await Command_CheckGraph()
     await interaction.response.send_message(content="Checkgraph:")
 
-async def SendMainChannelMessage(message):
-    await MainChannel.send(message)
+async def SendMainChannelMessage(message, delete_after:float=None):
+    await MainChannel.send(message, delete_after=delete_after)
 
 async def SendDebugChannelMessage(message):
     await DebugChannel.send(message)
@@ -619,6 +647,7 @@ async def Command_Register(Sender:str, ArchSlot:str):
     try:
         #Compile the Registration File's path
         RegistrationFile = RegistrationDirectory + Sender + ".json"
+        ProgRegistrationFile = RegistrationDirectory + Sender + "_Prog.json"
 
         # If the file does not exist, we create it to prevent indexing issues
         if not os.path.exists(RegistrationFile):
@@ -678,7 +707,7 @@ async def Command_ClearReg(Sender:str):
         print(e)
         await DebugChannel.send("ERROR IN CLEARREG <@"+DiscordAlertUserID+">")
 
-async def Command_KetchMeUp(User):
+async def Command_KetchMeUp(User, prog):
     try:
         RegistrationFile = RegistrationDirectory + str(User) + ".json"
         if not os.path.isfile(RegistrationFile):
@@ -686,7 +715,20 @@ async def Command_KetchMeUp(User):
         else:
             RegistrationContents = json.load(open(RegistrationFile, "r"))
             for reglines in RegistrationContents:
-                ItemQueueFile = ItemQueueDirectory + reglines.strip() + ".csv"
+                if not prog:
+                    ItemQueueFile = ItemQueueDirectory + reglines.strip() + ".csv"
+                    try:
+                        os.remove(ItemQueueDirectory + reglines.strip() + "_Prog.csv")
+                    except Exception as e:
+                        print(e)
+                        print("File not found, continuing...")
+                elif prog:
+                    ItemQueueFile = ItemQueueDirectory + reglines.strip() + "_Prog.csv"
+                    try:
+                        os.remove(ItemQueueDirectory + reglines.strip() + ".csv")
+                    except Exception as e:
+                        print(e)
+                        print("File not found, continuing...")
                 if not os.path.isfile(ItemQueueFile):
                     await User.send("There are no items for " + reglines.strip() + " :/")
                     continue
@@ -735,9 +777,12 @@ async def Command_KetchMeUp(User):
                 ketchupmessage = ketchupmessage + "```"
                 if not ketchupmessage == "``````":
                     await User.send(ketchupmessage)
+        await SendMainChannelMessage(f'Finished catching {User} up', delete_after=3.0)
+
     except Exception as e:
         WriteToErrorLog("Command_KetchMeUp", "Error in ketch me up command: " + str(e))
         print(e)
+        await SendMainChannelMessage(f'Failed catching {User} up \nDebug message sent', delete_after=3.0)
         await DebugChannel.send("ERROR IN KETCHMEUP <@"+DiscordAlertUserID+">")
 
 async def Command_GroupCheck(DMauthor, game):
@@ -1421,7 +1466,20 @@ def main():
     DiscordCycleCount = 0
 
     ## Gotta keep the bot running!
+    x=0
     while True:
+        now = datetime.datetime.now()
+        if not now.hour % 6 and x == 0:
+            tracker_client.stop()
+            tracker_client.start()
+            print("Every 6 hour Restarted Bot current time is "+ now.strftime("%X"))
+
+            x = 1
+        elif not now.hour % 6:
+            x = 1
+        else:
+            x = 0
+
         if not seppuku_queue.empty():
             print("!!! Critical Error Detected !!!")
             print("Seppuku Initiated - Goodbye Friend")
@@ -1483,7 +1541,7 @@ if __name__ == '__main__':
     #except Exception as e:
     #    WriteToErrorLog("Main", "Unsupported wakepy environment: " + str(e))
     #    print("Your terminal/os doesn't support wakepy, we'll just run without it!")
-    #    
+    #
     main()
 
 # On 7/12/2024 Bridgeipelago crashed the AP servers and caused Berserker to give me a code review:
