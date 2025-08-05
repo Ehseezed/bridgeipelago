@@ -400,6 +400,38 @@ async def on_message(message):
     
     if message.channel.id != MainChannel.id:
         return
+
+    if message.content.startswith('$commands'):
+        message = (
+            "```"
+            "<required>, [optional]\n"
+            "Available commands:\n\n"
+            "$commands - Displays this message\n\n"
+            "$register <slot> - Registers you for a slot\nI will be trying to make this allow for multiple slots in the future.\n\n"
+            "$clearreg - Clears your registration file\nI will be trying to allow for specific slot un registering\n\n"
+            "$listreg - Lists your registered slots\n\n"
+            "$ketchmeup [-prog]- Catches you up on missed items\n\n"
+            "$hints - Sends you hints for your registered game\n\n"
+            "$deathcount - Posts a deathcount chart and graph\n\n"
+            "$checkcount - Posts a check chart\n\n"
+            "$checkgraph - Posts a check graph\n\n"
+            "```"
+            "```"
+            "---debug commands---\n\n"
+            "$iloveyou - Sends you a message of love\nDoes not need Debug mode on\n\n"
+            "$hello - Sends you a hello message\n\nDoes not need Debug mode on\n"
+            "$archinfo - Sends you information about the Archipelago server\n\n"
+            "$setenv <variable> <value> - Sets an environment variable\nThis is mostly used for setting the Archipelago server URL and port if it ever fails to auto find the new port.\nDoes not need Debug mode on\n\n"
+            "```"
+            "```"
+            "---reload commands---\n\n"
+            "$reloadtracker - Reloads the tracker client\n\n"
+            "$reloaddiscord - Reloads the Discord bot\n\n"
+            "$reloaddata - Reloads the data variables\n\n"
+            "$reloadall - Reloads the tracker client, Discord bot, and data variables\n\n"
+            "```"
+        )
+        await SendMainChannelMessage(message)
     
     # Registers user for a alot in Archipelago
     if message.content.startswith('$register'):
@@ -470,6 +502,12 @@ async def on_message(message):
     if message.content.startswith('$reloaddata'):
         ReloadJSONPackages()
         await SendMainChannelMessage("Reloading datavars... Please wait 2-3 seconds.")
+
+    if message.content.startswith('$reloadall'):
+        discordseppuku_queue.put("Reloading Discord bot...")
+        ReloadBot()
+        ReloadJSONPackages()
+        await SendMainChannelMessage("Reloading all... Please wait about 15 seconds.")
 
     if not message.content.startswith('$') and EnableDiscordBridge == "true":
         relayed_message = "(Discord) " + str(message.author) + " - " + str(message.content)
