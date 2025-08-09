@@ -15,6 +15,8 @@ import json
 import typing
 import uuid
 import os
+from os import getenv
+
 from dotenv import load_dotenv, set_key
 from enum import Enum
 import logging
@@ -509,7 +511,35 @@ async def on_message(message):
         ReloadJSONPackages()
         await SendMainChannelMessage("Reloading all... Please wait about 15 seconds.")
 
-    if not message.content.startswith('$') and EnableDiscordBridge == "true":
+    adminUsers = json.loads(RegistrationDirectory + "admins.json")
+
+    if (message.content.startswith('$AdminAdd') and str(message.author) in adminUsers):
+        list = str(message.content).split()
+        newAdmins = []
+        for i in list:
+            if i != "$AdminAdd":
+                if i not in adminUsers:
+                    newAdmins.append(i)
+
+
+
+    adminUsers = [
+        str(os.getenv('DiscordAlertUserID'))
+    ]
+
+    if message.startswith("/admin") and str(os.getenv('AdminPassword')) != "<customPasswordHere>":
+        relayed_message = ""
+        if str(message.author) in adminUsers:
+            if message.content.startswith("/admin login"):
+                discordbridge_queue.put(f"/admin login {str(os.getenv("AdminPassword"))}")
+                await SendMainChannelMessage("Admin login sent to Archipelago server.")
+            else:
+                relayed_message = str(message.content)
+        else:
+            await SendMainChannelMessage("You are not authorized to do that.")
+
+        discordbridge_queue.put(relayed_message)
+    elif not message.content.startswith('$') and EnableDiscordBridge == "true":
         relayed_message = "(Discord) " + str(message.author) + " - " + str(message.content)
         discordbridge_queue.put(relayed_message)
 
@@ -736,6 +766,22 @@ async def SendDebugChannelMessage(message):
 
 async def SendDMMessage(message,user):
     await MainChannel.send(message)
+
+async def Command_AdminAdd(list:list):
+    AdminFile = RegistrationDirectory + "admins.json"
+
+    if not os.path.exists(AdminFile):
+        o = open(AdminFile, "w")
+        o.write("[]")
+        o.close()
+
+    AdminContents = json.load(open(AdminFile, "r"))
+    for i in list:
+        if not i in AdminContents:
+            AdminContents.append(i)
+            json.dump(AdminContents, open(AdminFile, "w"))
+
+    return None
 
 async def Command_Register(Sender:str, ArchSlot:str):
     try:
