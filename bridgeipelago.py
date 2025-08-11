@@ -404,7 +404,7 @@ async def on_message(message):
         return
 
     if message.content.startswith('$commands'):
-        message = (
+        discord_message = (
             "```"
             "<required>, [optional]\n"
             "Available commands:\n\n"
@@ -418,6 +418,9 @@ async def on_message(message):
             "$checkcount - Posts a check chart\n\n"
             "$checkgraph - Posts a check graph\n\n"
             "```"
+        )
+        await SendMainChannelMessage(discord_message)
+        discord_message = (
             "```"
             "---debug commands---\n\n"
             "$iloveyou - Sends you a message of love\nDoes not need Debug mode on\n\n"
@@ -425,6 +428,9 @@ async def on_message(message):
             "$archinfo - Sends you information about the Archipelago server\n\n"
             "$setenv <variable> <value> - Sets an environment variable\nThis is mostly used for setting the Archipelago server URL and port if it ever fails to auto find the new port.\nDoes not need Debug mode on\n\n"
             "```"
+        )
+        await SendMainChannelMessage(discord_message)
+        discord_message = (
             "```"
             "---reload commands---\n\n"
             "$reloadtracker - Reloads the tracker client\n\n"
@@ -433,7 +439,18 @@ async def on_message(message):
             "$reloadall - Reloads the tracker client, Discord bot, and data variables\n\n"
             "```"
         )
-        await SendMainChannelMessage(message)
+        await SendMainChannelMessage(discord_message)
+        discord_message = (
+            "```"
+            "---admin commands---\n\n"
+            "$listadmins - lists the current admins\n\n"
+            "$adminadd <discord username> [discord username 2] [...] - Adds Admins\nNeeds to be run by an existing Admin\nNeeds to have admin password set correctly\n\n"
+            "!admin login - Logs the bot into server side admin commands\nNeeds to be run by an existing Admin\n\n"
+            "!admin /<command> - Causes the bot to run the specified command\nNeeds to be run by an existing Admin\n\n"
+            "$reloadall - Reloads the tracker client, Discord bot, and data variables\n\n"
+            "```"
+        )
+        await SendMainChannelMessage(discord_message)
     
     # Registers user for a alot in Archipelago
     if message.content.startswith('$register'):
@@ -511,35 +528,45 @@ async def on_message(message):
         ReloadJSONPackages()
         await SendMainChannelMessage("Reloading all... Please wait about 15 seconds.")
 
-    adminUsers = json.loads(RegistrationDirectory + "admins.json")
+    try:
+        with open(RegistrationDirectory + "admins.json", "r") as f:
+            adminUsers = json.load(f)
+    except:
+        adminUsers = [
+            str(os.getenv('DiscordDefaultAdminName'))
+        ]
+    print(adminUsers)
 
-    if (message.content.startswith('$AdminAdd') and str(message.author) in adminUsers):
+    if message.content.startswith('$listadmins'):
+        print(adminUsers)
+        await SendMainChannelMessage("**Current Admin Users:**\n" + "\n".join(adminUsers))
+
+    if (message.content.startswith('$adminadd') and str(message.author) in adminUsers):
+        print(message.content)
         list = str(message.content).split()
         newAdmins = []
         for i in list:
-            if i != "$AdminAdd":
+            if i != "$adminadd":
                 if i not in adminUsers:
                     newAdmins.append(i)
+        await Command_AdminAdd(newAdmins)
 
+    if message.content.startswith("/"):
+        discordbridge_queue.put(str(message.content))
 
-
-    adminUsers = [
-        str(os.getenv('DiscordAlertUserID'))
-    ]
-
-    if message.startswith("/admin") and str(os.getenv('AdminPassword')) != "<customPasswordHere>":
+    if message.content.startswith("!admin") and str(os.getenv('AdminPassword')) != "<customPasswordHere>":
         relayed_message = ""
         if str(message.author) in adminUsers:
-            if message.content.startswith("/admin login"):
-                discordbridge_queue.put(f"/admin login {str(os.getenv("AdminPassword"))}")
+            if message.content.startswith("!admin login"):
+                discordbridge_queue.put(f"!admin login {str(os.getenv("AdminPassword"))}")
                 await SendMainChannelMessage("Admin login sent to Archipelago server.")
             else:
                 relayed_message = str(message.content)
+                discordbridge_queue.put(relayed_message)
         else:
             await SendMainChannelMessage("You are not authorized to do that.")
 
-        discordbridge_queue.put(relayed_message)
-    elif not message.content.startswith('$') and EnableDiscordBridge == "true":
+    if (not message.content.startswith('$') and not message.content.startswith('!') and EnableDiscordBridge == "true"):
         relayed_message = "(Discord) " + str(message.author) + " - " + str(message.content)
         discordbridge_queue.put(relayed_message)
 
@@ -772,7 +799,8 @@ async def Command_AdminAdd(list:list):
 
     if not os.path.exists(AdminFile):
         o = open(AdminFile, "w")
-        o.write("[]")
+        user = str(os.getenv('DiscordDefaultAdminName'))
+        o.write(f"[\"{user}\"]")
         o.close()
 
     AdminContents = json.load(open(AdminFile, "r"))
