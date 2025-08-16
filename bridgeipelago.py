@@ -454,10 +454,17 @@ async def on_message(message):
     
     # Registers user for a alot in Archipelago
     if message.content.startswith('$register'):
-        ArchSlot = message.content
-        ArchSlot = ArchSlot.replace("$register ","")
-        Status = await Command_Register(str(message.author),ArchSlot)
+        Status = "You have been registered for: "
+        register = await stringSplitter(str(message.content))
+        for slot in register:
+            await Command_Register(str(message.author),slot)
+            Status += f'{slot}, '
+
+        Status = Status[:-2]
+        Status += "!"
         await SendMainChannelMessage(Status)
+
+
 
     # Clears registration file for user
     if message.content.startswith('$clearreg'):
@@ -543,12 +550,7 @@ async def on_message(message):
 
     if (message.content.startswith('$adminadd') and str(message.author) in adminUsers):
         print(message.content)
-        list = str(message.content).split()
-        newAdmins = []
-        for i in list:
-            if i != "$adminadd":
-                if i not in adminUsers:
-                    newAdmins.append(i)
+        newAdmins = await stringSplitter(str(message.content))
         await Command_AdminAdd(newAdmins)
 
     if message.content.startswith("/"):
@@ -793,6 +795,17 @@ async def SendDebugChannelMessage(message):
 
 async def SendDMMessage(message,user):
     await MainChannel.send(message)
+
+async def stringSplitter(string:str) -> list:
+    list = string.split(", ")
+    newlist = []
+    for i in list:
+        if not i.startswith("$"):
+            newlist.append(i)
+        else:
+            a = i.split()
+            newlist.append(a[1])
+    return newlist
 
 async def Command_AdminAdd(list:list):
     AdminFile = RegistrationDirectory + "admins.json"
