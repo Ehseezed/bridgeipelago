@@ -409,8 +409,8 @@ async def on_message(message):
             "<required>, [optional]\n"
             "Available commands:\n\n"
             "$commands - Displays this message\n\n"
-            "$register <slot> - Registers you for a slot\nI will be trying to make this allow for multiple slots in the future.\n\n"
-            "$clearreg - Clears your registration file\nI will be trying to allow for specific slot un registering\n\n"
+            "$register <slot>[, slot] - Registers you for a slot\nTo register for multiple use a \", \" separator.\n\n"
+            "$clearreg <slot> [, slot] [!all]- Removes entries your registration file\nTo unregister for multiple use a \", \" separator.\n!all will clear everything\n\n"
             "$listreg - Lists your registered slots\n\n"
             "$ketchmeup [-prog]- Catches you up on missed items\n\n"
             "$hints - Sends you hints for your registered game\n\n"
@@ -457,7 +457,7 @@ async def on_message(message):
         Status = "You have been registered for: "
         register = await stringSplitter(str(message.content))
         for slot in register:
-            await Command_Register(str(message.author),slot)
+            await Command_Register(str(message.author), slot)
             Status += f'{slot}, '
 
         Status = Status[:-2]
@@ -468,7 +468,8 @@ async def on_message(message):
 
     # Clears registration file for user
     if message.content.startswith('$clearreg'):
-        Status = await Command_ClearReg(str(message.author))
+        list = await stringSplitter(str(message.content))
+        Status = await Command_ClearReg(str(message.author), list)
         await SendMainChannelMessage(Status)
 
     if message.content.startswith('$listreg'):
@@ -542,7 +543,6 @@ async def on_message(message):
         adminUsers = [
             str(os.getenv('DiscordDefaultAdminName'))
         ]
-    print(adminUsers)
 
     if message.content.startswith('$listadmins'):
         print(adminUsers)
@@ -571,6 +571,8 @@ async def on_message(message):
     if (not message.content.startswith('$') and not message.content.startswith('!') and EnableDiscordBridge == "true"):
         relayed_message = "(Discord) " + str(message.author) + " - " + str(message.content)
         discordbridge_queue.put(relayed_message)
+
+    print(f'{message.content} -- from {message.author}')
 
 @tasks.loop(seconds=1)
 async def CheckCommandQueue():
@@ -742,7 +744,7 @@ async def first_command(interaction,slot:str):
     guild=discord.Object(id=DiscordGuildID)
 )
 async def first_command(interaction):
-    Status = await Command_ClearReg(str(interaction.user))
+    Status = await Command_ClearReg(str(interaction.user),[])
     await interaction.response.send_message(content=Status,ephemeral=True)
     
 @tree.command(name="ketchmeup",
@@ -875,13 +877,18 @@ async def Command_ListRegistrations(Sender):
         print(e)
         await DebugChannel.send("ERROR IN LISTREG <@"+DiscordAlertUserID+">")
 
-async def Command_ClearReg(Sender:str):
+async def Command_ClearReg(Sender:str, list:list):
     try:
         RegistrationFile = RegistrationDirectory + Sender + ".json"
         if not os.path.exists(RegistrationFile):
             return "You're not registered for any slots :("
-        os.remove(RegistrationFile)
-        return "Your registration has been cleared."
+        RegistrationContents = json.load(open(RegistrationFile, "r"))
+        new_contents = [entry for entry in RegistrationContents if entry not in list]
+        json.dump(new_contents, open(RegistrationFile, "w"))
+        if "!all" in list:
+            os.remove(RegistrationFile)
+            return "All registrations removed."
+        return "Removed specified registrations."
     except Exception as e:
         WriteToErrorLog("Command_ClearReg", "Error in clear registration command: " + str(e))
         print(e)
