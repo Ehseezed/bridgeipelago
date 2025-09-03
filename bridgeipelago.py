@@ -398,17 +398,63 @@ async def on_message(message):
     
     if message.channel.id != MainChannel.id:
         return
-    
+
+    if message.content.startswith('$commands'):
+        discord_message = (
+            "```"
+            "<required>, [optional]\n"
+            "Available commands:\n\n"
+            "$commands - Displays this message\n\n"
+            "$register <slot>[, slot] - Registers you for a slot\nTo register for multiple use a \", \" separator.\n\n"
+            "$clearreg <slot> [, slot] [!all]- Removes entries your registration file\nTo unregister for multiple use a \", \" separator.\n!all will clear everything\n\n"
+            "$listreg - Lists your registered slots\n\n"
+            "$ketchmeup [-prog]- Catches you up on missed items\n\n"
+            "$hints - Sends you hints for your registered game\n\n"
+            "$deathcount - Posts a deathcount chart and graph\n\n"
+            "$checkcount - Posts a check chart\n\n"
+            "$checkgraph - Posts a check graph\n\n"
+        "```"
+        )
+        await SendMainChannelMessage(discord_message)
+        discord_message = (
+            "```"
+            "---debug commands---\n\n"
+            "$iloveyou - Sends you a message of love\nDoes not need Debug mode on\n\n"
+            "$hello - Sends you a hello message\n\nDoes not need Debug mode on\n"
+            "$archinfo - Sends you information about the Archipelago server\n\n"
+            "$setenv <variable> <value> - Sets an environment variable\nThis is mostly used for setting the Archipelago server URL and port if it ever fails to auto find the new port.\nDoes not need Debug mode on\n\n"
+            "```"
+        )
+        await SendMainChannelMessage(discord_message)
+        discord_message = (
+            "```"
+            "---reload commands---\n\n"
+            "$reloadtracker - Reloads the tracker client\n\n"
+            "$reloaddiscord - Reloads the Discord bot\n\n"
+            "$reloaddata - Reloads the data variables\n\n"
+            "```"
+        )
+        await SendMainChannelMessage(discord_message)
+
+
     # Registers user for a alot in Archipelago
     if message.content.startswith('$register'):
-        ArchSlot = message.content
-        ArchSlot = ArchSlot.replace("$register ","")
-        Status = await Command_Register(str(message.author),ArchSlot)
+        Status = "You have been registered for: "
+        register = stringSplitter(str(message.content))
+        for slot in register:
+            await Command_Register(str(message.author), slot)
+            Status += f'{slot}, '
+
+        Status = Status[:-2]
+        Status += "!"
         await SendMainChannelMessage(Status)
 
-    # Clears registration file for user
+
+
+        # Clears registration file for user
     if message.content.startswith('$clearreg'):
-        Status = await Command_ClearReg(str(message.author))
+        list = stringSplitter(str(message.content))
+        Status = await Command_ClearReg(str(message.author), list)
         await SendMainChannelMessage(Status)
 
     if message.content.startswith('$listreg'):
@@ -1492,6 +1538,17 @@ async def CancelProcess():
 def Discord():
     print("++ Starting Discord Client")
     DiscordClient.run(DiscordToken)
+
+def stringSplitter(string:str) -> list:
+    list = string.split(", ")
+    newlist = []
+    for i in list:
+        if not i.startswith("$"):
+            newlist.append(i)
+        else:
+            a = i.split()
+            newlist.append(a[1])
+    return newlist
 
 ## Threadded async functions
 if(DiscordJoinOnly == "false"):
